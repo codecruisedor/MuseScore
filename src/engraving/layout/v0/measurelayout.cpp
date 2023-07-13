@@ -806,6 +806,10 @@ void MeasureLayout::getNextMeasure(LayoutContext& ctx)
     //
     for (size_t staffIdx = 0; staffIdx < ctx.dom().nstaves(); ++staffIdx) {
         const Staff* staff = ctx.dom().staff(staffIdx);
+        if (!staff->show()) {
+            continue;
+        }
+
         const Drumset* drumset
             = staff->part()->instrument(measure->tick())->useDrumset() ? staff->part()->instrument(measure->tick())->drumset() : 0;
         AccidentalState as;          // list of already set accidentals for this measure
@@ -912,6 +916,11 @@ void MeasureLayout::getNextMeasure(LayoutContext& ctx)
     }
 
     for (staff_idx_t staffIdx = 0; staffIdx < ctx.dom().nstaves(); ++staffIdx) {
+        const Staff* staff = ctx.dom().staff(staffIdx);
+        if (!staff->show()) {
+            continue;
+        }
+
         for (Segment& segment : measure->segments()) {
             if (segment.isChordRestType()) {
                 ChordLayout::layoutChords1(ctx, &segment, staffIdx);
@@ -1694,6 +1703,21 @@ void MeasureLayout::removeSystemHeader(Measure* m)
         seg->setEnabled(false);
     }
     m->setHeader(false);
+
+    // remove all "generated" key signatures
+    Segment* kSeg = m->findFirstR(SegmentType::KeySig, Fraction(0, 1));
+    if (!kSeg) {
+        return;
+    }
+    for (EngravingItem* e : kSeg->elist()) {
+        if (e && e->generated()) {
+            kSeg->elist().at(e->track()) = 0;
+        }
+    }
+    kSeg->checkEmpty();
+    if (kSeg->empty()) {
+        m->remove(kSeg);
+    }
 }
 
 void MeasureLayout::addSystemTrailer(Measure* m, Measure* nm, LayoutContext& ctx)
@@ -1777,31 +1801,29 @@ void MeasureLayout::addSystemTrailer(Measure* m, Measure* nm, LayoutContext& ctx
                 m->add(s);
             }
 
-            if (staffIsPitchedAtNextMeas) {
-                KeySig* ks = toKeySig(s->element(track));
-                KeySigEvent key2 = staff->keySigEvent(m->endTick());
+            KeySig* keySig = nullptr;
+            EngravingItem* keySigElem = s->element(track);
+            if (keySigElem && keySigElem->isKeySig()) {
+                keySig = toKeySig(keySigElem);
+            }
 
-                if (!ks) {
-                    ks = Factory::createKeySig(s);
-                    ks->setTrack(track);
-                    ks->setGenerated(true);
-                    ks->setParent(s);
-                    s->add(ks);
+            KeySigEvent key2 = staff->keySigEvent(m->endTick());
+            bool needsCourtesy = staff->key(m->tick()) != key2.key();
+
+            if (staffIsPitchedAtNextMeas && needsCourtesy) {
+                if (!keySig) {
+                    keySig = Factory::createKeySig(s);
+                    keySig->setTrack(track);
+                    keySig->setGenerated(true);
+                    keySig->setParent(s);
+                    s->add(keySig);
                     s->setTrailer(true);
                 }
-                //else if (!(ks->keySigEvent() == key2)) {
-                //      score()->undo(new ChangeKeySig(ks, key2, ks->showCourtesy()));
-                //      }
-                ks->setKeySigEvent(key2);
-                TLayout::layout(ks, ctx);
+                keySig->setKeySigEvent(key2);
+                TLayout::layout(keySig, ctx);
                 //s->createShape(track / VOICES);
                 s->setEnabled(true);
-            } else { /// !staffIsPitchedAtNextMeas
-                KeySig* keySig = nullptr;
-                EngravingItem* keySigElem = s->element(track);
-                if (keySigElem && keySigElem->isKeySig()) {
-                    keySig = toKeySig(keySigElem);
-                }
+            } else { /// !staffIsPitchedAtNextMeas || !needsCourtesy
                 if (keySig) {
                     s->remove(keySig);
                 }

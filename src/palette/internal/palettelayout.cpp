@@ -27,6 +27,8 @@
 #include "engraving/types/typesconv.h"
 #include "engraving/types/symnames.h"
 
+#include "engraving/compat/dummyelement.h"
+
 #include "engraving/libmscore/engravingitem.h"
 #include "engraving/libmscore/score.h"
 
@@ -36,13 +38,18 @@
 #include "engraving/libmscore/articulation.h"
 #include "engraving/libmscore/bagpembell.h"
 #include "engraving/libmscore/barline.h"
+#include "engraving/libmscore/bend.h"
 #include "engraving/libmscore/bracket.h"
+#include "engraving/libmscore/breath.h"
 #include "engraving/libmscore/capo.h"
+#include "engraving/libmscore/chordline.h"
 #include "engraving/libmscore/clef.h"
 #include "engraving/libmscore/dynamic.h"
 #include "engraving/libmscore/expression.h"
+#include "engraving/libmscore/fermata.h"
 #include "engraving/libmscore/fingering.h"
 #include "engraving/libmscore/fret.h"
+#include "engraving/libmscore/glissando.h"
 #include "engraving/libmscore/gradualtempochange.h"
 #include "engraving/libmscore/hairpin.h"
 #include "engraving/libmscore/harppedaldiagram.h"
@@ -52,12 +59,18 @@
 #include "engraving/libmscore/letring.h"
 #include "engraving/libmscore/line.h"
 #include "engraving/libmscore/marker.h"
+#include "engraving/libmscore/measurenumber.h"
+#include "engraving/libmscore/measurerepeat.h"
+#include "engraving/libmscore/note.h"
+#include "engraving/libmscore/ornament.h"
 #include "engraving/libmscore/ottava.h"
 #include "engraving/libmscore/palmmute.h"
 #include "engraving/libmscore/pedal.h"
 #include "engraving/libmscore/playtechannotation.h"
 #include "engraving/libmscore/rehearsalmark.h"
+#include "engraving/libmscore/slur.h"
 #include "engraving/libmscore/stafftext.h"
+#include "engraving/libmscore/stafftypechange.h"
 #include "engraving/libmscore/symbol.h"
 #include "engraving/libmscore/systemtext.h"
 #include "engraving/libmscore/tempotext.h"
@@ -65,12 +78,17 @@
 #include "engraving/libmscore/textline.h"
 #include "engraving/libmscore/textlinebase.h"
 #include "engraving/libmscore/timesig.h"
+#include "engraving/libmscore/tremolobar.h"
+#include "engraving/libmscore/trill.h"
 #include "engraving/libmscore/vibrato.h"
 #include "engraving/libmscore/volta.h"
 
 #include "engraving/libmscore/utils.h"
 
-#include "engraving/layout/pal/tlayout.h"
+#include "engraving/layout/v0/tlayout.h"
+#include "engraving/layout/v0/tremololayout.h"
+#include "engraving/layout/v0/arpeggiolayout.h"
+#include "engraving/layout/v0/chordlayout.h"
 
 #include "log.h"
 
@@ -80,7 +98,6 @@ using namespace mu::palette;
 
 void PaletteLayout::layoutItem(EngravingItem* item)
 {
-    layout::pal::LayoutContext ctxpal(item->score());
     Context ctx(item->score());
 
     switch (item->type()) {
@@ -90,15 +107,23 @@ void PaletteLayout::layoutItem(EngravingItem* item)
         break;
     case ElementType::AMBITUS:      layout(toAmbitus(item), ctx);
         break;
+    case ElementType::ARPEGGIO:     layout(toArpeggio(item), ctx);
+        break;
     case ElementType::ARTICULATION: layout(toArticulation(item), ctx);
         break;
     case ElementType::BAGPIPE_EMBELLISHMENT: layout(toBagpipeEmbellishment(item), ctx);
         break;
     case ElementType::BAR_LINE:     layout(toBarLine(item), ctx);
         break;
+    case ElementType::BEND:         layout(toBend(item), ctx);
+        break;
     case ElementType::BRACKET:      layout(toBracket(item), ctx);
         break;
+    case ElementType::BREATH:       layout(toBreath(item), ctx);
+        break;
     case ElementType::CAPO:         layout(toCapo(item), ctx);
+        break;
+    case ElementType::CHORDLINE:    layout(toChordLine(item), ctx);
         break;
     case ElementType::CLEF:         layout(toClef(item), ctx);
         break;
@@ -106,9 +131,13 @@ void PaletteLayout::layoutItem(EngravingItem* item)
         break;
     case ElementType::EXPRESSION:   layout(toExpression(item), ctx);
         break;
+    case ElementType::FERMATA:      layout(toFermata(item), ctx);
+        break;
     case ElementType::FINGERING:    layout(toFingering(item), ctx);
         break;
     case ElementType::FRET_DIAGRAM: layout(toFretDiagram(item), ctx);
+        break;
+    case ElementType::GLISSANDO:    layout(toGlissando(item), ctx);
         break;
     case ElementType::GRADUAL_TEMPO_CHANGE: layout(toGradualTempoChange(item), ctx);
         break;
@@ -122,11 +151,21 @@ void PaletteLayout::layoutItem(EngravingItem* item)
         break;
     case ElementType::KEYSIG:       layout(toKeySig(item), ctx);
         break;
+    case ElementType::LAYOUT_BREAK: layout(toLayoutBreak(item), ctx);
+        break;
     case ElementType::LET_RING:     layout(toLetRing(item), ctx);
         break;
     case ElementType::MARKER:       layout(toMarker(item), ctx);
         break;
+    case ElementType::MEASURE_NUMBER: layout(toMeasureNumber(item), ctx);
+        break;
+    case ElementType::MEASURE_REPEAT: layout(toMeasureRepeat(item), ctx);
+        break;
+    case ElementType::NOTEHEAD:     layout(toNoteHead(item), ctx);
+        break;
     case ElementType::OTTAVA:       layout(toOttava(item), ctx);
+        break;
+    case ElementType::ORNAMENT:     layout(toOrnament(item), ctx);
         break;
     case ElementType::PALM_MUTE:    layout(toPalmMute(item), ctx);
         break;
@@ -136,7 +175,13 @@ void PaletteLayout::layoutItem(EngravingItem* item)
         break;
     case ElementType::REHEARSAL_MARK: layout(toRehearsalMark(item), ctx);
         break;
+    case ElementType::SLUR:         layout(toSlur(item), ctx);
+        break;
+    case ElementType::SPACER:       layout(toSpacer(item), ctx);
+        break;
     case ElementType::STAFF_TEXT:   layout(toStaffText(item), ctx);
+        break;
+    case ElementType::STAFFTYPE_CHANGE: layout(toStaffTypeChange(item), ctx);
         break;
     case ElementType::SYMBOL:       layout(toSymbol(item), ctx);
         break;
@@ -148,14 +193,25 @@ void PaletteLayout::layoutItem(EngravingItem* item)
         break;
     case ElementType::TIMESIG:      layout(toTimeSig(item), ctx);
         break;
+    case ElementType::TREMOLO:      layout(toTremolo(item), ctx);
+        break;
+    case ElementType::TREMOLOBAR:   layout(toTremoloBar(item), ctx);
+        break;
+    case ElementType::TRILL:        layout(toTrill(item), ctx);
+        break;
     case ElementType::VIBRATO:      layout(toVibrato(item), ctx);
         break;
     case ElementType::VOLTA:        layout(toVolta(item), ctx);
         break;
+    // drumset
+    case ElementType::CHORD:        layout(toChord(item), ctx);
+        break;
     default:
-        //! TODO Still need
-        // LOGD() << item->typeName();
-        layout::pal::TLayout::layoutItem(item, ctxpal);
+        LOGE() << "Not handled: " << item->typeName();
+        IF_ASSERT_FAILED(false) {
+            layout::v0::LayoutContext ctxv0(item->score());
+            layout::v0::TLayout::layoutItem(item, ctxv0);
+        }
         break;
     }
 }
@@ -177,6 +233,8 @@ void PaletteLayout::layoutLineSegment(LineSegment* item, const Context& ctx)
         break;
     case ElementType::TEXTLINE_SEGMENT:  layout(toTextLineSegment(item), ctx);
         break;
+    case ElementType::TRILL_SEGMENT:     layout(toTrillSegment(item), ctx);
+        break;
     case ElementType::VIBRATO_SEGMENT:   layout(toVibratoSegment(item), ctx);
         break;
     case ElementType::VOLTA_SEGMENT:     layout(toVoltaSegment(item), ctx);
@@ -195,6 +253,11 @@ const MStyle& PaletteLayout::Context::style() const
 std::shared_ptr<IEngravingFont> PaletteLayout::Context::engravingFont() const
 {
     return m_score->engravingFont();
+}
+
+compat::DummyElement* PaletteLayout::Context::dummyParent() const
+{
+    return m_score->dummy();
 }
 
 void PaletteLayout::layout(Accidental* item, const Context&)
@@ -292,6 +355,12 @@ void PaletteLayout::layout(Ambitus* item, const Context& ctx)
                   .united(item->topAccidental()->bbox().translated(item->topAccidental()->ipos()))
                   .united(item->bottomAccidental()->bbox().translated(item->bottomAccidental()->ipos()))
                   );
+}
+
+void PaletteLayout::layout(Arpeggio* item, const Context& ctx)
+{
+    engraving::layout::v0::LayoutContext ctxv0(ctx.dontUseScore());
+    engraving::layout::v0::ArpeggioLayout::layout(item, ctxv0);
 }
 
 void PaletteLayout::layout(Articulation* item, const Context&)
@@ -412,6 +481,95 @@ void PaletteLayout::layout(BarLine* item, const Context& ctx)
     item->setbbox(bbox);
 }
 
+void PaletteLayout::layout(Bend* item, const Context&)
+{
+    double spatium = item->spatium();
+    double lw = item->lineWidth();
+
+    item->setNoteWidth(0.0);
+    item->setNotePos(PointF());
+
+    RectF bb;
+
+    mu::draw::FontMetrics fm(item->font(spatium));
+
+    size_t n   = item->points().size();
+    double x = item->noteWidth();
+    double y = -spatium * .8;
+    double x2, y2;
+
+    double aw = spatium * .5;
+    PolygonF arrowUp;
+    arrowUp << PointF(0, 0) << PointF(aw * .5, aw) << PointF(-aw * .5, aw);
+    PolygonF arrowDown;
+    arrowDown << PointF(0, 0) << PointF(aw * .5, -aw) << PointF(-aw * .5, -aw);
+
+    for (size_t pt = 0; pt < n; ++pt) {
+        if (pt == (n - 1)) {
+            break;
+        }
+        int pitch = item->points().at(pt).pitch;
+        if (pt == 0 && pitch) {
+            y2 = -item->notePos().y() - spatium * 2;
+            x2 = x;
+            bb.unite(RectF(x, y, x2 - x, y2 - y));
+
+            bb.unite(arrowUp.translated(x2, y2 + spatium * .2).boundingRect());
+
+            int idx = (pitch + 12) / 25;
+            const char* l = Bend::label[idx];
+            bb.unite(fm.boundingRect(RectF(x2, y2, 0, 0),
+                                     draw::AlignHCenter | draw::AlignBottom | draw::TextDontClip,
+                                     String::fromAscii(l)));
+            y = y2;
+        }
+        if (pitch == item->points().at(pt + 1).pitch) {
+            if (pt == (n - 2)) {
+                break;
+            }
+            x2 = x + spatium;
+            y2 = y;
+            bb.unite(RectF(x, y, x2 - x, y2 - y));
+        } else if (pitch < item->points().at(pt + 1).pitch) {
+            // up
+            x2 = x + spatium * .5;
+            y2 = -item->notePos().y() - spatium * 2;
+            double dx = x2 - x;
+            double dy = y2 - y;
+
+            PainterPath path;
+            path.moveTo(x, y);
+            path.cubicTo(x + dx / 2, y, x2, y + dy / 4, x2, y2);
+            bb.unite(path.boundingRect());
+            bb.unite(arrowUp.translated(x2, y2 + spatium * .2).boundingRect());
+
+            int idx = (item->points().at(pt + 1).pitch + 12) / 25;
+            const char* l = Bend::label[idx];
+            bb.unite(fm.boundingRect(RectF(x2, y2, 0, 0),
+                                     draw::AlignHCenter | draw::AlignBottom | draw::TextDontClip,
+                                     String::fromAscii(l)));
+        } else {
+            // down
+            x2 = x + spatium * .5;
+            y2 = y + spatium * 3;
+            double dx = x2 - x;
+            double dy = y2 - y;
+
+            PainterPath path;
+            path.moveTo(x, y);
+            path.cubicTo(x + dx / 2, y, x2, y + dy / 4, x2, y2);
+            bb.unite(path.boundingRect());
+
+            bb.unite(arrowDown.translated(x2, y2 - spatium * .2).boundingRect());
+        }
+        x = x2;
+        y = y2;
+    }
+    bb.adjust(-lw, -lw, lw, lw);
+    item->setbbox(bb);
+    item->setPos(0.0, 0.0);
+}
+
 void PaletteLayout::layout(Bracket* item, const Context& ctx)
 {
     Shape shape;
@@ -471,9 +629,75 @@ void PaletteLayout::layout(Bracket* item, const Context& ctx)
     item->setShape(shape);
 }
 
+void PaletteLayout::layout(Breath* item, const Context&)
+{
+    item->setbbox(item->symBbox(item->symId()));
+}
+
 void PaletteLayout::layout(Capo* item, const Context& ctx)
 {
     layoutTextBase(item, ctx);
+}
+
+void PaletteLayout::layout(Chord* item, const Context& ctx)
+{
+    layout::v0::LayoutContext ctxv0(ctx.dontUseScore());
+    layout::v0::ChordLayout::layout(item, ctxv0);
+}
+
+void PaletteLayout::layout(ChordLine* item, const Context& ctx)
+{
+    item->setMag(1.0);
+    if (!item->modified()) {
+        double x2 = 0;
+        double y2 = 0;
+        double baseLength = item->spatium();
+        double horBaseLength = 1.2 * baseLength;     // let the symbols extend a bit more horizontally
+        x2 += item->isToTheLeft() ? -horBaseLength : horBaseLength;
+        y2 += item->isBelow() ? baseLength : -baseLength;
+        if (item->chordLineType() != ChordLineType::NOTYPE && !item->isWavy()) {
+            PainterPath path;
+            if (!item->isToTheLeft()) {
+                if (item->isStraight()) {
+                    path.lineTo(x2, y2);
+                } else {
+                    path.cubicTo(x2 / 2, 0.0, x2, y2 / 2, x2, y2);
+                }
+            } else {
+                if (item->isStraight()) {
+                    path.lineTo(x2, y2);
+                } else {
+                    path.cubicTo(0.0, y2 / 2, x2 / 2, y2, x2, y2);
+                }
+            }
+            item->setPath(path);
+        }
+    }
+
+    item->setPos(0.0, 0.0);
+
+    if (!item->isWavy()) {
+        RectF r = item->path().boundingRect();
+        int x1 = 0, y1 = 0, width = 0, height = 0;
+
+        x1 = r.x();
+        y1 = r.y();
+        width = r.width();
+        height = r.height();
+        item->bbox().setRect(x1, y1, width, height);
+    } else {
+        RectF r = ctx.engravingFont()->bbox(ChordLine::WAVE_SYMBOLS, item->magS());
+        double angle = ChordLine::WAVE_ANGEL * M_PI / 180;
+
+        r.setHeight(r.height() + r.width() * sin(angle));
+
+        /// TODO: calculate properly the rect for wavy type
+        if (item->chordLineType() == ChordLineType::DOIT) {
+            r.setY(item->y() - r.height() * (item->onTabStaff() ? 1.25 : 1));
+        }
+
+        item->setbbox(r);
+    }
 }
 
 void PaletteLayout::layout(Clef* item, const Context& ctx)
@@ -517,6 +741,14 @@ void PaletteLayout::layout(Clef* item, const Context& ctx)
 void PaletteLayout::layout(Expression* item, const Context& ctx)
 {
     layoutTextBase(item, ctx);
+}
+
+void PaletteLayout::layout(Fermata* item, const Context&)
+{
+    item->setPos(PointF());
+    item->setOffset(PointF());
+    RectF b(item->symBbox(item->symId()));
+    item->setbbox(b.translated(-0.5 * b.width(), 0.0));
 }
 
 void PaletteLayout::layout(Fingering* item, const Context& ctx)
@@ -563,6 +795,31 @@ void PaletteLayout::layout(FretDiagram* item, const Context& ctx)
 void PaletteLayout::layout(Dynamic* item, const Context& ctx)
 {
     layoutTextBase(item, ctx);
+}
+
+void PaletteLayout::layout(Glissando* item, const Context& ctx)
+{
+    double spatium = item->spatium();
+
+    if (item->spannerSegments().empty()) {
+        item->add(item->createLineSegment(ctx.dummyParent()->system()));
+    }
+    LineSegment* s = item->frontSegment();
+    s->setPos(PointF(-spatium * Glissando::GLISS_PALETTE_WIDTH / 2, spatium * Glissando::GLISS_PALETTE_HEIGHT / 2));
+    s->setPos2(PointF(spatium * Glissando::GLISS_PALETTE_WIDTH, -spatium * Glissando::GLISS_PALETTE_HEIGHT));
+    layout(static_cast<GlissandoSegment*>(s), ctx);
+}
+
+void PaletteLayout::layout(GlissandoSegment* item, const Context&)
+{
+    if (item->pos2().x() <= 0) {
+        item->setbbox(RectF());
+        return;
+    }
+
+    RectF r = RectF(0.0, 0.0, item->pos2().x(), item->pos2().y()).normalized();
+    double lw = item->glissando()->lineWidth() * .5;
+    item->setbbox(r.adjusted(-lw, -lw, lw, lw));
 }
 
 void PaletteLayout::layout(GradualTempoChange* item, const Context& ctx)
@@ -837,6 +1094,11 @@ void PaletteLayout::layout(KeySig* item, const Context& ctx)
     }
 }
 
+void PaletteLayout::layout(LayoutBreak* item, const Context&)
+{
+    UNUSED(item);
+}
+
 void PaletteLayout::layout(LetRing* item, const Context& ctx)
 {
     layoutLine(item, ctx);
@@ -847,9 +1109,79 @@ void PaletteLayout::layout(LetRingSegment* item, const Context& ctx)
     layoutTextLineBaseSegment(item, ctx);
 }
 
+void PaletteLayout::layout(NoteHead* item, const Context& ctx)
+{
+    layout(static_cast<Symbol*>(item), ctx);
+}
+
 void PaletteLayout::layout(Marker* item, const Context& ctx)
 {
     layoutTextBase(item, ctx);
+}
+
+void PaletteLayout::layout(MeasureNumber* item, const Context& ctx)
+{
+    item->setPos(PointF());
+    item->setOffset(PointF());
+
+    layout1TextBase(item, ctx);
+}
+
+void PaletteLayout::layout(MeasureRepeat* item, const Context& ctx)
+{
+    switch (item->numMeasures()) {
+    case 1:
+    {
+        item->setSymId(SymId::repeat1Bar);
+        if (ctx.style().styleB(Sid::oneMeasureRepeatShow1)) {
+            item->setNumberSym(1);
+        } else {
+            item->clearNumberSym();
+        }
+        break;
+    }
+    case 2:
+        item->setSymId(SymId::repeat2Bars);
+        item->setNumberSym(item->numMeasures());
+        break;
+    case 4:
+        item->setSymId(SymId::repeat4Bars);
+        item->setNumberSym(item->numMeasures());
+        break;
+    default:
+        item->setSymId(SymId::noSym); // should never happen
+        item->clearNumberSym();
+        break;
+    }
+
+    RectF bbox = item->symBbox(item->symId());
+    item->setbbox(bbox);
+}
+
+void PaletteLayout::layout(Ornament* item, const Context& ctx)
+{
+    double spatium = item->spatium();
+    double vertMargin = 0.35 * spatium;
+    constexpr double ornamentAccidentalMag = 0.6; // TODO: style?
+
+    if (!item->showCueNote()) {
+        for (size_t i = 0; i < item->accidentalsAboveAndBelow().size(); ++i) {
+            bool above = (i == 0);
+            Accidental* accidental = item->accidentalsAboveAndBelow()[i];
+            if (!accidental) {
+                continue;
+            }
+            accidental->computeMag();
+            accidental->setMag(accidental->mag() * ornamentAccidentalMag);
+            layout(accidental, ctx);
+            Shape accidentalShape = accidental->shape();
+            double minVertDist = above
+                                 ? accidentalShape.minVerticalDistance(item->bbox())
+                                 : Shape(item->bbox()).minVerticalDistance(accidentalShape);
+            accidental->setPos(-0.5 * accidental->width(), above ? (-minVertDist - vertMargin) : (minVertDist + vertMargin));
+        }
+        return;
+    }
 }
 
 void PaletteLayout::layout(Ottava* item, const Context& ctx)
@@ -893,9 +1225,46 @@ void PaletteLayout::layout(RehearsalMark* item, const Context& ctx)
     layoutTextBase(item, ctx);
 }
 
+void PaletteLayout::layout(Slur* item, const Context& ctx)
+{
+    double spatium = item->spatium();
+    SlurSegment* s = nullptr;
+    if (item->spannerSegments().empty()) {
+        s = new SlurSegment(ctx.dummyParent()->system());
+        s->setTrack(item->track());
+        item->add(s);
+    } else {
+        s = item->frontSegment();
+    }
+
+    s->setSpannerSegmentType(SpannerSegmentType::SINGLE);
+
+    s->setPos(PointF());
+    s->ups(Grip::START).p = PointF(0, 0);
+    s->ups(Grip::END).p   = PointF(spatium * 6, 0);
+    s->setExtraHeight(0.0);
+
+    s->computeBezier();
+    s->setbbox(s->path().boundingRect());
+
+    item->setbbox(s->bbox());
+}
+
+void PaletteLayout::layout(Spacer* item, const Context&)
+{
+    UNUSED(item);
+}
+
 void PaletteLayout::layout(StaffText* item, const Context& ctx)
 {
     layoutTextBase(item, ctx);
+}
+
+void PaletteLayout::layout(StaffTypeChange* item, const Context& ctx)
+{
+    double spatium = ctx.style().spatium();
+    item->setbbox(RectF(-item->lw() * .5, -item->lw() * .5, spatium * 2.5 + item->lw(), spatium * 2.5 + item->lw()));
+    item->setPos(0.0, 0.0);
 }
 
 void PaletteLayout::layout(Symbol* item, const Context&)
@@ -1035,6 +1404,99 @@ void PaletteLayout::layout(TimeSig* item, const Context& ctx)
     item->setDrawArgs(drawArgs);
 }
 
+void PaletteLayout::layout(Tremolo* item, const Context& ctx)
+{
+    //! TODO
+    engraving::layout::v0::LayoutContext ctxv0(ctx.dontUseScore());
+    engraving::layout::v0::TremoloLayout::layout(item, ctxv0);
+}
+
+void PaletteLayout::layout(TremoloBar* item, const Context&)
+{
+    double spatium = item->spatium();
+
+    item->setPos(PointF());
+
+    double timeFactor  = item->userMag() / 1.0;
+    double pitchFactor = -spatium * 0.02;
+
+    PolygonF polygon;
+    for (const PitchValue& v : item->points()) {
+        polygon << PointF(v.time * timeFactor, v.pitch * pitchFactor);
+    }
+    item->setPolygon(polygon);
+
+    double w = item->lineWidth().val();
+    item->setbbox(item->polygon().boundingRect().adjusted(-w, -w, w, w));
+}
+
+void PaletteLayout::layout(Trill* item, const Context& ctx)
+{
+    layoutLine(static_cast<SLine*>(item), ctx);
+}
+
+void PaletteLayout::layout(TrillSegment* item, const Context& ctx)
+{
+    if (item->spanner()->placeBelow()) {
+        item->setPosY(0.0);
+    }
+
+    bool accidentalGoesBelow = item->trill()->trillType() == TrillType::DOWNPRALL_LINE;
+    Trill* trill = item->trill();
+    Ornament* ornament = trill->ornament();
+    if (ornament) {
+        if (item->isSingleBeginType()) {
+            layout(ornament, ctx);
+        }
+        trill->setAccidental(accidentalGoesBelow ? ornament->accidentalBelow() : ornament->accidentalAbove());
+        trill->setCueNoteChord(ornament->cueNoteChord());
+        ArticulationAnchor anchor = ornament->anchor();
+        if (anchor == ArticulationAnchor::AUTO) {
+            trill->setPlacement(trill->track() % 2 ? PlacementV::BELOW : PlacementV::ABOVE);
+        } else {
+            trill->setPlacement(anchor == ArticulationAnchor::TOP ? PlacementV::ABOVE : PlacementV::BELOW);
+        }
+        trill->setPropertyFlags(Pid::PLACEMENT, PropertyFlags::STYLED); // Ensures that the property isn't written (it is written by the ornamnent)
+    }
+
+    if (item->isSingleType() || item->isBeginType()) {
+        switch (item->trill()->trillType()) {
+        case TrillType::TRILL_LINE:
+            item->symbolLine(SymId::ornamentTrill, SymId::wiggleTrill);
+            break;
+        case TrillType::PRALLPRALL_LINE:
+            item->symbolLine(SymId::wiggleTrill, SymId::wiggleTrill);
+            break;
+        case TrillType::UPPRALL_LINE:
+            item->symbolLine(SymId::ornamentBottomLeftConcaveStroke,
+                             SymId::ornamentZigZagLineNoRightEnd, SymId::ornamentZigZagLineWithRightEnd);
+            break;
+        case TrillType::DOWNPRALL_LINE:
+            item->symbolLine(SymId::ornamentLeftVerticalStroke,
+                             SymId::ornamentZigZagLineNoRightEnd, SymId::ornamentZigZagLineWithRightEnd);
+            break;
+        }
+        Accidental* a = item->trill()->accidental();
+        if (a) {
+            double vertMargin = 0.35 * item->spatium();
+            RectF box = item->symBbox(item->symbols().front());
+            double x = 0;
+            double y = 0;
+            x = 0.5 * (box.width() - a->width());
+            double minVertDist = accidentalGoesBelow
+                                 ? Shape(box).minVerticalDistance(a->shape())
+                                 : a->shape().minVerticalDistance(Shape(box));
+            y = accidentalGoesBelow ? minVertDist + vertMargin : -minVertDist - vertMargin;
+            a->setPos(x, y);
+            a->setParent(item);
+        }
+    } else {
+        item->symbolLine(SymId::wiggleTrill, SymId::wiggleTrill);
+    }
+
+    item->setOffset(PointF());
+}
+
 void PaletteLayout::layout(Vibrato* item, const Context& ctx)
 {
     layoutLine(static_cast<SLine*>(item), ctx);
@@ -1043,7 +1505,7 @@ void PaletteLayout::layout(Vibrato* item, const Context& ctx)
 void PaletteLayout::layout(VibratoSegment* item, const Context&)
 {
     if (item->spanner()->placeBelow()) {
-        item->setPosY(item->staff() ? item->staff()->height() : 0.0);
+        item->setPosY(0.0);
     }
 
     switch (item->vibrato()->vibratoType()) {

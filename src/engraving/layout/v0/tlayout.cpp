@@ -164,7 +164,7 @@ using LayoutTypes = rtti::TypeList<Accidental, ActionIcon, Ambitus, Arpeggio, Ar
                                    BagpipeEmbellishment, BarLine, Beam, Bend, StretchedBend,
                                    HBox, VBox, FBox, TBox, Bracket, Breath,
                                    Chord, ChordLine, Clef, Capo,
-                                   Dynamic, Expression,
+                                   DeadSlapped, Dynamic, Expression,
                                    Fermata, FiguredBass, Fingering, FretDiagram,
                                    Glissando, GlissandoSegment, GradualTempoChange, GradualTempoChangeSegment,
                                    Hairpin, HairpinSegment, HarpPedalDiagram, Harmony, HarmonicMarkSegment, Hook,
@@ -205,7 +205,7 @@ void TLayout::layoutItem(EngravingItem* item, LayoutContext& ctx)
 
     bool found = LayoutVisitor::visit(LayoutTypes {}, item, ctx);
     if (!found) {
-        LOGE() << "not found in lyaout types item: " << item->typeName();
+        LOGE() << "not found in layout types item: " << item->typeName();
         DO_ASSERT(found);
     }
 }
@@ -1535,7 +1535,12 @@ void TLayout::layout(Expression* item, LayoutContext& ctx)
 
     item->setSnappedDynamic(nullptr);
 
-    if (!item->autoplace() || !item->snapToDynamics()) {
+    if (!item->autoplace()) {
+        return;
+    }
+
+    if (!item->snapToDynamics()) {
+        item->autoplaceSegmentElement();
         return;
     }
 
@@ -2688,8 +2693,10 @@ void TLayout::layout(HairpinSegment* item, LayoutContext& ctx)
                 }
                 if (ed->ipos().y() != ny) {
                     ed->setPosY(ny);
-                    if (ed->snappedExpression()) {
-                        ed->snappedExpression()->setPosY(ny);
+                    Expression* snappedExpression = ed->snappedExpression();
+                    if (snappedExpression) {
+                        double yOffsetDiff = snappedExpression->offset().y() - ed->offset().y();
+                        snappedExpression->setPosY(ny - yOffsetDiff);
                     }
                     if (ed->addToSkyline()) {
                         Segment* s = ed->segment();
@@ -5322,6 +5329,9 @@ SpannerSegment* TLayout::layoutSystemSLine(SLine* line, System* system, LayoutCo
 
 SpannerSegment* TLayout::layoutSystem(LyricsLine* line, System* system, LayoutContext& ctx)
 {
+    if (!line->lyrics()) {
+        return nullptr; // a lyrics line with no lyrics shouldn't exist
+    }
     Fraction stick = system->firstMeasure()->tick();
     Fraction etick = system->lastMeasure()->endTick();
 
@@ -5397,7 +5407,10 @@ SpannerSegment* TLayout::layoutSystem(LyricsLine* line, System* system, LayoutCo
     }
 
     TLayout::layout(lineSegm, ctx);
-
+    if (!line->lyrics()) {
+        // this line could have been removed in the process of laying out surrounding lyrics
+        return nullptr;
+    }
     // if temp melisma extend the first line segment to be
     // after the lyrics syllable (otherwise the melisma segment
     // will be too short).

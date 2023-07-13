@@ -238,7 +238,7 @@ RetVal<INotationProjectPtr> ProjectActionsController::loadProject(const io::path
             return ret;
         }
 
-        if (checkCanIgnoreError(ret, io::filename(loadPath).toString())) {
+        if (checkCanIgnoreError(ret, loadPath)) {
             ret = project->load(loadPath, "" /*stylePath*/, true /*forceMode*/, format);
         }
 
@@ -1375,7 +1375,7 @@ void ProjectActionsController::showScoreDownloadError(const Ret& ret)
     interactive()->warning(title, message);
 }
 
-bool ProjectActionsController::checkCanIgnoreError(const Ret& ret, const String& projectName)
+bool ProjectActionsController::checkCanIgnoreError(const Ret& ret, const io::path_t& filepath)
 {
     if (ret) {
         return true;
@@ -1383,15 +1383,22 @@ bool ProjectActionsController::checkCanIgnoreError(const Ret& ret, const String&
 
     switch (static_cast<engraving::Err>(ret.code())) {
     case engraving::Err::FileTooOld:
-    case engraving::Err::FileTooNew:
     case engraving::Err::FileOld300Format:
         return askIfUserAgreesToOpenProjectWithIncompatibleVersion(ret.text());
-    case engraving::Err::FileCorrupted:
-        return askIfUserAgreesToOpenCorruptedProject(projectName, ret.text());
-    default:
-        warnProjectCannotBeOpened(projectName, ret.text());
+    case engraving::Err::FileTooNew:
+        warnFileTooNew(filepath);
         return false;
+    case engraving::Err::FileCorrupted:
+        return askIfUserAgreesToOpenCorruptedProject(io::filename(filepath).toString(), ret.text());
+    case engraving::Err::FileCriticallyCorrupted:
+        warnProjectCriticallyCorrupted(io::filename(filepath).toString(), ret.text());
+        return false;
+    default:
+        break;
     }
+
+    warnProjectCannotBeOpened(ret, filepath);
+    return false;
 }
 
 bool ProjectActionsController::askIfUserAgreesToOpenProjectWithIncompatibleVersion(const std::string& errorText)
@@ -1404,6 +1411,13 @@ bool ProjectActionsController::askIfUserAgreesToOpenProjectWithIncompatibleVersi
     }, openAnywayBtn.btn).button();
 
     return btn == openAnywayBtn.btn;
+}
+
+void ProjectActionsController::warnFileTooNew(const io::path_t& filepath)
+{
+    interactive()->error(qtrc("project", "Cannot read file %1").arg(io::toNativeSeparators(filepath).toQString()).toStdString(),
+                         trc("project", "This file was saved using a newer version of MuseScore. "
+                                        "Please visit <a href=\"https://musescore.org\">musescore.org</a> to obtain the latest version."));
 }
 
 bool ProjectActionsController::askIfUserAgreesToOpenCorruptedProject(const String& projectName, const std::string& errorText)
@@ -1421,7 +1435,7 @@ bool ProjectActionsController::askIfUserAgreesToOpenCorruptedProject(const Strin
     return btn == openAnywayBtn.btn;
 }
 
-void ProjectActionsController::warnProjectCannotBeOpened(const String& projectName, const std::string& errorText)
+void ProjectActionsController::warnProjectCriticallyCorrupted(const String& projectName, const std::string& errorText)
 {
     std::string title = mtrc("project", "File “%1” is corrupted and cannot be opened").arg(projectName).toStdString();
     std::string body = trc("project", "Get help for this issue on musescore.org.");
@@ -1436,6 +1450,29 @@ void ProjectActionsController::warnProjectCannotBeOpened(const String& projectNa
     if (btn == getHelpBtn.btn) {
         interactive()->openUrl(configuration()->supportForumUrl());
     }
+}
+
+void ProjectActionsController::warnProjectCannotBeOpened(const Ret& ret, const io::path_t& filepath)
+{
+    std::string title = mtrc("project", "Cannot read file %1").arg(io::toNativeSeparators(filepath).toString()).toStdString();
+    std::string body;
+
+    switch (ret.code()) {
+    case int(engraving::Err::FileNotFound):
+        body = trc("project", "This file does not exist or cannot be accessed at the moment.");
+        break;
+    case int(engraving::Err::FileOpenError):
+        body = trc("project", "This file could not be opened. Please make sure that MuseScore has permission to read this file.");
+        break;
+    default:
+        if (!ret.text().empty()) {
+            body = ret.text();
+        } else {
+            body = trc("project", "An error occurred while reading this file.");
+        }
+    }
+
+    interactive()->error(title, body);
 }
 
 void ProjectActionsController::importPdf()
